@@ -26,10 +26,13 @@ export function formatDisplayDate(s: string): string {
 }
 
 async function rivhitPost<T>(endpoint: string, body: Record<string, unknown>): Promise<T> {
+  const token = process.env.RIVHIT_API_TOKEN;
+  if (!token) throw new Error("RIVHIT_API_TOKEN is not set in environment variables");
+
   const res = await fetch(`${BASE_URL}/${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_token: process.env.RIVHIT_API_TOKEN, ...body }),
+    body: JSON.stringify({ api_token: token, ...body }),
   });
 
   if (!res.ok) throw new Error(`Rivhit API error ${res.status}: ${endpoint}`);
