@@ -1,0 +1,64 @@
+/* ── MyGan מלאי — widget styles injected on mygan.co.il product pages ── */
+
+#mygan-inventory-widget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 10px 14px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: #0c4a6e;
+  direction: rtl;
+}
+
+.mygan-inventory-label {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mygan-inventory-value {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Loading spinner text */
+.mygan-loading {
+  color: #64748b;
+  font-style: italic;
+}
+
+/* Error state */
+.mygan-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+/* Stock badges */
+.mygan-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.mygan-in-stock    { background: #d1fae5; color: #065f46; }
+.mygan-low-stock   { background: #fef3c7; color: #92400e; }
+.mygan-out-of-stock{ background: #fee2e2; color: #991b1b; }
+
+/* Per-storage list */
+.mygan-storages {
+  width: 100%;
+  margin-top: 6px;
+  padding-right: 16px;
+  font-size: 13px;
+  color: #1e40af;
+  list-style: disc;
+}
+.mygan-storages li { margin-top: 2px; }

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "MyGan מלאי",
+  "version": "1.0.0",
+  "description": "הצגת מלאי מוצר בזמן אמת (Rivhit) בדפי מוצר של mygan.co.il",
+  "default_locale": "he",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://mygan.co.il/*",
+    "https://www.mygan.co.il/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://mygan.co.il/items/*", "https://www.mygan.co.il/items/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MyGan מלאי — הגדרות"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

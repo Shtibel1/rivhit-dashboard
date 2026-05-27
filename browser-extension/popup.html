@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyGan מלאי — הגדרות</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      width: 320px;
+      padding: 16px;
+      background: #f8fafc;
+      color: #1e293b;
+    }
+    h1 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1 span { font-size: 20px; }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #374151;
+    }
+    .field { margin-bottom: 14px; }
+    .hint {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 3px;
+    }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      direction: ltr;
+      text-align: left;
+    }
+    input:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+    }
+    button {
+      width: 100%;
+      padding: 9px;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    button:hover { background: #1d4ed8; }
+    #status {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+    #status.success { background: #d1fae5; color: #065f46; display: block; }
+    #status.error   { background: #fee2e2; color: #991b1b; display: block; }
+  </style>
+</head>
+<body>
+  <h1><span>📦</span> MyGan מלאי</h1>
+
+  <div class="field">
+    <label for="dashboardUrl">כתובת הדאשבורד</label>
+    <input type="text" id="dashboardUrl" placeholder="https://your-dashboard.amplifyapp.com" />
+    <p class="hint">כתובת ה-Next.js dashboard (ללא / בסוף)</p>
+  </div>
+
+  <div class="field">
+    <label for="apiKey">מפתח API</label>
+    <input type="password" id="apiKey" placeholder="הכנס את EXTENSION_API_KEY" />
+    <p class="hint">ה-EXTENSION_API_KEY שהוגדר בסביבת ה-Amplify</p>
+  </div>
+
+  <button id="saveBtn">שמור הגדרות</button>
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

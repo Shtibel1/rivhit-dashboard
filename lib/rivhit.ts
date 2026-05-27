@@ -29,11 +29,20 @@ async function rivhitPost<T>(endpoint: string, body: Record<string, unknown>): P
   const token = process.env.RIVHIT_API_TOKEN;
   if (!token) throw new Error("RIVHIT_API_TOKEN is not set in environment variables");
 
-  const res = await fetch(`${BASE_URL}/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ api_token: token, ...body }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_token: token, ...body }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) throw new Error(`Rivhit API error ${res.status}: ${endpoint}`);
 
@@ -149,6 +158,7 @@ interface PaymentReportRaw {
 export async function getPaymentReport(params: {
   from_date?: string;
   until_date?: string;
+  rows_limit?: number;
 } = {}): Promise<PaymentReportItem[]> {
   const res = await rivhitPost<PaymentReportRaw>("Payment.Report", params);
   return res.data?.payments ?? [];
@@ -175,4 +185,83 @@ export async function getPnLReport(params: {
 } = {}): Promise<PnLReport | null> {
   const res = await rivhitPost<PnLResponse>("Accounting.PnLReport", params);
   return res.data ?? null;
+}
+
+// ---- Document Details ----
+
+export interface DocumentDetailItem {
+  description: string;
+  catalog_number?: string;
+  quantity: number;
+  price_nis: number;
+  total_line: number;
+  item_id?: number;
+}
+
+interface DocumentDetailsRaw {
+  error_code: number;
+  data: {
+    document_number: string;
+    document_date: string;
+    customer_name: string;
+    document_total: number;
+    is_cancelled: boolean;
+    items: DocumentDetailItem[];
+  };
+}
+
+export type DocumentDetails = DocumentDetailsRaw["data"];
+
+export async function getDocumentDetails(
+  document_number: number,
+  document_type: number,
+): Promise<DocumentDetails | null> {
+  try {
+    const res = await rivhitPost<DocumentDetailsRaw>("Document.Details", {
+      document_number,
+      document_type,
+    });
+    return res.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ---- Item Inventory ----
+
+export interface ItemStorageEntry {
+  storage_id: number;
+  storage_name: string;
+  quantity: number;
+}
+
+export interface ItemInventory {
+  catalog_number: string;
+  total_quantity: number;
+  storages: ItemStorageEntry[];
+}
+
+interface ItemQuantityRaw {
+  error_code: number;
+  data: {
+    quantity?: number;
+    storage_list?: Array<{
+      storage_id: number;
+      storage_name: string;
+      quantity: number;
+    }>;
+  };
+}
+
+export async function getItemInventory(catalog_number: string): Promise<ItemInventory> {
+  const res = await rivhitPost<ItemQuantityRaw>("Item.Quantity", { catalog_number });
+  const storages: ItemStorageEntry[] = (res.data?.storage_list ?? []).map((s) => ({
+    storage_id: s.storage_id,
+    storage_name: s.storage_name,
+    quantity: s.quantity,
+  }));
+  const total_quantity =
+    res.data?.quantity ??
+    storages.reduce((sum, s) => sum + s.quantity, 0);
+  return { catalog_number, total_quantity, storages };
 }

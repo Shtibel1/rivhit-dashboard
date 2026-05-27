@@ -8,9 +8,9 @@ export async function GET(req: NextRequest) {
     const until_date = searchParams.get("until_date") ?? undefined;
 
     const [documents, customers, payments] = await Promise.allSettled([
-      getDocuments({ from_date, until_date, rows_limit: 500 }),
-      getCustomers({ rows_limit: 500 }),
-      getPaymentReport({ from_date, until_date }),
+      getDocuments({ from_date, until_date, rows_limit: 200 }),
+      getCustomers({ rows_limit: 200 }),
+      getPaymentReport({ from_date, until_date, rows_limit: 500 }),
     ]);
 
     const docs = documents.status === "fulfilled" ? documents.value : [];
