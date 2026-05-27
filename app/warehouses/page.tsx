@@ -229,7 +229,7 @@ export default function WarehousesPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredDocs.map((doc) => (
-                  <tr key={doc.document_number} className="hover:bg-slate-50 transition-colors">
+                  <tr key={`${doc.document_number}-${doc.warehouseType}`} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{doc.document_date}</td>
                     <td className="px-4 py-3">
                       {doc.document_link ? (
