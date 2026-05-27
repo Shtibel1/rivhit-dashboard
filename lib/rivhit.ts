@@ -275,17 +275,28 @@ export async function getItemInventory(catalog_number: string): Promise<ItemInve
     return { catalog_number, total_quantity: 0, storages: [] };
   }
 
-  // Step 2: fetch quantity by item_id
-  const qtyRes = await rivhitPost<ItemQuantityRaw>("Item.Quantity", {
-    item_id: item.item_id,
-  });
-  const storages: ItemStorageEntry[] = (qtyRes.data?.storage_list ?? []).map((s) => ({
-    storage_id: s.storage_id,
-    storage_name: s.storage_name,
-    quantity: s.quantity,
-  }));
-  const total_quantity =
-    qtyRes.data?.quantity ??
-    storages.reduce((sum, s) => sum + s.quantity, 0);
-  return { catalog_number, total_quantity, storages };
+  // Step 2: fetch all inventory-related endpoints in parallel and return raw data for inspection
+  const [qtyRes, storageRes, detailsRes] = await Promise.allSettled([
+    rivhitPost("Item.Quantity", { item_id: item.item_id }),
+    rivhitPost("Item.StorageReport", { item_id: item.item_id }),
+    rivhitPost("Item.Details", { item_id: item.item_id }),
+  ]);
+
+  console.log("[Rivhit] Item.List item:", JSON.stringify(item));
+  console.log("[Rivhit] Item.Quantity raw:", qtyRes.status === "fulfilled" ? JSON.stringify(qtyRes.value) : qtyRes.reason);
+  console.log("[Rivhit] Item.StorageReport raw:", storageRes.status === "fulfilled" ? JSON.stringify(storageRes.value) : storageRes.reason);
+  console.log("[Rivhit] Item.Details raw:", detailsRes.status === "fulfilled" ? JSON.stringify(detailsRes.value) : detailsRes.reason);
+
+  // Temporary: return raw responses so the API caller can inspect all fields
+  return {
+    catalog_number,
+    total_quantity: 0,
+    storages: [],
+    _raw: {
+      item,
+      quantity: qtyRes.status === "fulfilled" ? qtyRes.value : null,
+      storageReport: storageRes.status === "fulfilled" ? storageRes.value : null,
+      details: detailsRes.status === "fulfilled" ? detailsRes.value : null,
+    },
+  } as unknown as ItemInventory;
 }

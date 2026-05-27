@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const inventory = await getItemInventory(catalogNumber.trim());
+    // Return full object including _raw for inspection
     return NextResponse.json(inventory, { headers: corsHeaders() });
   } catch (err) {
     return NextResponse.json(
