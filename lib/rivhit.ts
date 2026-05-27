@@ -241,6 +241,17 @@ export interface ItemInventory {
   storages: ItemStorageEntry[];
 }
 
+interface ItemListRaw {
+  error_code: number;
+  data: {
+    item_list?: Array<{
+      item_id: number;
+      catalog_number?: string;
+      description?: string;
+    }>;
+  };
+}
+
 interface ItemQuantityRaw {
   error_code: number;
   data: {
@@ -254,14 +265,27 @@ interface ItemQuantityRaw {
 }
 
 export async function getItemInventory(catalog_number: string): Promise<ItemInventory> {
-  const res = await rivhitPost<ItemQuantityRaw>("Item.Quantity", { catalog_number });
-  const storages: ItemStorageEntry[] = (res.data?.storage_list ?? []).map((s) => ({
+  // Step 1: resolve catalog_number → item_id via Item.List
+  const listRes = await rivhitPost<ItemListRaw>("Item.List", {
+    catalog_number,
+    rows_limit: 1,
+  });
+  const item = listRes.data?.item_list?.[0];
+  if (!item) {
+    return { catalog_number, total_quantity: 0, storages: [] };
+  }
+
+  // Step 2: fetch quantity by item_id
+  const qtyRes = await rivhitPost<ItemQuantityRaw>("Item.Quantity", {
+    item_id: item.item_id,
+  });
+  const storages: ItemStorageEntry[] = (qtyRes.data?.storage_list ?? []).map((s) => ({
     storage_id: s.storage_id,
     storage_name: s.storage_name,
     quantity: s.quantity,
   }));
   const total_quantity =
-    res.data?.quantity ??
+    qtyRes.data?.quantity ??
     storages.reduce((sum, s) => sum + s.quantity, 0);
   return { catalog_number, total_quantity, storages };
 }

@@ -3,7 +3,6 @@
   "name": "MyGan מלאי",
   "version": "1.0.0",
   "description": "הצגת מלאי מוצר בזמן אמת (Rivhit) בדפי מוצר של mygan.co.il",
-  "default_locale": "he",
   "permissions": ["storage"],
   "host_permissions": [
     "https://mygan.co.il/*",

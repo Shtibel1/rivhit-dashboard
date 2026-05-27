@@ -8,25 +8,51 @@
 (function () {
   "use strict";
 
+  const LOG = (...args) => console.log("[MyGan מלאי]", ...args);
+  const WARN = (...args) => console.warn("[MyGan מלאי]", ...args);
+  const ERR  = (...args) => console.error("[MyGan מלאי]", ...args);
+
+  LOG("content script loaded, URL:", location.href);
+
   // ── 1. Extract מקט from the page ───────────────────────────────────────────
   // The catalog number appears in the page as: מק"ט XXXX
   // We search the full document text for that pattern.
   function extractCatalogNumber() {
-    // Try structured meta / data attributes first
+    // 1. Konimbo / mygan.co.il — catalog number is in .code_item
+    const codeItem = document.querySelector(".code_item");
+    if (codeItem) {
+      const v = codeItem.textContent.trim();
+      if (v) {
+        LOG("found catalog number via .code_item:", v);
+        return v;
+      }
+    }
+
+    // 2. Structured meta / data attributes
     const metaCatalog = document.querySelector('[itemprop="sku"], [data-sku], [data-catalog]');
     if (metaCatalog) {
       const v = (metaCatalog.getAttribute("content") || metaCatalog.textContent || "").trim();
-      if (v) return v;
+      if (v) {
+        LOG("found catalog number via meta/attribute:", v);
+        return v;
+      }
     }
 
-    // Fallback: scan page text for מק"ט / מקט pattern
+    // 3. Fallback: scan page text for מק"ט / מקט pattern
     const pattern = /מק[""״]?ט\s*[:：]?\s*([A-Za-z0-9\-_]+)/;
+    LOG("scanning page text for מקט pattern...");
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     let node;
+    let scanned = 0;
     while ((node = walker.nextNode())) {
+      scanned++;
       const m = node.nodeValue.match(pattern);
-      if (m) return m[1].trim();
+      if (m) {
+        LOG(`found מקט in text node after scanning ${scanned} nodes:`, m[1].trim(), "| raw text:", JSON.stringify(node.nodeValue.trim()));
+        return m[1].trim();
+      }
     }
+    WARN(`מקט not found after scanning ${scanned} text nodes. Dumping page body snippet:`, document.body.innerText.slice(0, 500));
     return null;
   }
 
@@ -55,19 +81,22 @@
     ];
     let anchor = null;
     for (const sel of candidates) {
-      anchor = document.querySelector(sel);
-      if (anchor) break;
+      const found = document.querySelector(sel);
+      LOG(`selector "${sel}":`, found ? found.outerHTML.slice(0, 80) : "not found");
+      if (found && !anchor) anchor = found;
     }
 
     if (anchor) {
+      LOG("injecting widget after:", anchor.outerHTML.slice(0, 80));
       anchor.insertAdjacentElement("afterend", widget);
     } else {
-      // Fallback: prepend to body
+      WARN("no suitable anchor found — prepending widget to body");
       document.body.prepend(widget);
     }
   }
 
   function renderInventory(widget, data) {
+    LOG("render inventory data:", JSON.stringify(data));
     const valueEl = widget.querySelector(".mygan-inventory-value");
     valueEl.classList.remove("mygan-loading", "mygan-error");
 
@@ -109,25 +138,33 @@
   async function fetchInventory(catalogNumber, dashboardUrl, apiKey) {
     const url = new URL("/api/inventory", dashboardUrl);
     url.searchParams.set("catalog_number", catalogNumber);
+    LOG("fetching:", url.toString());
 
     const res = await fetch(url.toString(), {
       headers: { "x-extension-key": apiKey },
       credentials: "omit",
     });
 
+    LOG("response status:", res.status);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      const body = await res.text().catch(() => "(empty)");
+      ERR("API error response body:", body);
+      throw new Error(`HTTP ${res.status}: ${body}`);
     }
-    return res.json();
+    const json = await res.json();
+    LOG("API response:", JSON.stringify(json));
+    return json;
   }
 
   // ── 4. Main ─────────────────────────────────────────────────────────────────
   async function main() {
+    LOG("main() started");
     const catalogNumber = extractCatalogNumber();
     if (!catalogNumber) {
-      // No product catalog number found — nothing to show
+      WARN("no catalog number found — widget will not be shown");
       return;
     }
+    LOG("catalog number:", catalogNumber);
 
     const widget = createWidget();
     injectWidget(widget);
@@ -137,12 +174,15 @@
       const result = await chrome.storage.sync.get(["dashboardUrl", "apiKey"]);
       dashboardUrl = result.dashboardUrl;
       apiKey = result.apiKey;
-    } catch {
+      LOG("settings loaded — dashboardUrl:", dashboardUrl, "| apiKey set:", !!apiKey);
+    } catch (e) {
+      ERR("failed to read chrome.storage:", e);
       renderError(widget, "שגיאה בקריאת הגדרות");
       return;
     }
 
     if (!dashboardUrl || !apiKey) {
+      WARN("dashboardUrl or apiKey missing in storage");
       renderError(widget, "נא להגדיר את כתובת הדאשבורד ומפתח ה-API בתוסף");
       return;
     }
@@ -151,9 +191,10 @@
       const data = await fetchInventory(catalogNumber, dashboardUrl, apiKey);
       renderInventory(widget, data);
     } catch (err) {
+      ERR("fetchInventory failed:", err);
       renderError(widget, `שגיאה: ${err.message}`);
     }
   }
 
-  main();
+  main().catch((err) => ERR("unhandled error in main():", err));
 })();
