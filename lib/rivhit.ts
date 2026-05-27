@@ -268,35 +268,37 @@ export async function getItemInventory(catalog_number: string): Promise<ItemInve
   // Step 1: resolve catalog_number → item_id via Item.List
   const listRes = await rivhitPost<ItemListRaw>("Item.List", {
     catalog_number,
-    rows_limit: 1,
+    rows_limit: 5,
   });
-  const item = listRes.data?.item_list?.[0];
+  console.log("[Rivhit] Item.List search for catalog_number=" + catalog_number + ":", JSON.stringify(listRes));
+
+  // Also fetch first 20 items without filter to see what exists in Rivhit
+  const allItemsRes = await rivhitPost<ItemListRaw>("Item.List", { rows_limit: 20 });
+  console.log("[Rivhit] Item.List (first 20, no filter):", JSON.stringify(allItemsRes));
+
+  const item = listRes.data?.item_list?.find(i => i.item_id !== 0);
   if (!item) {
-    return { catalog_number, total_quantity: 0, storages: [] };
+    console.log("[Rivhit] No real item found for catalog_number=" + catalog_number + " (only free-text / item_id=0 returned)");
+    return { catalog_number, total_quantity: 0, storages: [], _debug: { listResponse: listRes, allItems: allItemsRes } } as unknown as ItemInventory;
   }
 
-  // Step 2: fetch all inventory-related endpoints in parallel and return raw data for inspection
-  const [qtyRes, storageRes, detailsRes] = await Promise.allSettled([
+  const [qtyRes, storageRes] = await Promise.allSettled([
     rivhitPost("Item.Quantity", { item_id: item.item_id }),
     rivhitPost("Item.StorageReport", { item_id: item.item_id }),
-    rivhitPost("Item.Details", { item_id: item.item_id }),
   ]);
 
-  console.log("[Rivhit] Item.List item:", JSON.stringify(item));
   console.log("[Rivhit] Item.Quantity raw:", qtyRes.status === "fulfilled" ? JSON.stringify(qtyRes.value) : qtyRes.reason);
   console.log("[Rivhit] Item.StorageReport raw:", storageRes.status === "fulfilled" ? JSON.stringify(storageRes.value) : storageRes.reason);
-  console.log("[Rivhit] Item.Details raw:", detailsRes.status === "fulfilled" ? JSON.stringify(detailsRes.value) : detailsRes.reason);
 
-  // Temporary: return raw responses so the API caller can inspect all fields
   return {
     catalog_number,
     total_quantity: 0,
     storages: [],
-    _raw: {
+    _debug: {
       item,
       quantity: qtyRes.status === "fulfilled" ? qtyRes.value : null,
       storageReport: storageRes.status === "fulfilled" ? storageRes.value : null,
-      details: detailsRes.status === "fulfilled" ? detailsRes.value : null,
+      allItems: allItemsRes,
     },
   } as unknown as ItemInventory;
 }
