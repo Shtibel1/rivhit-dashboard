@@ -246,59 +246,37 @@ interface ItemListRaw {
   data: {
     item_list?: Array<{
       item_id: number;
-      catalog_number?: string;
-      description?: string;
-    }>;
-  };
-}
-
-interface ItemQuantityRaw {
-  error_code: number;
-  data: {
-    quantity?: number;
-    storage_list?: Array<{
-      storage_id: number;
-      storage_name: string;
+      item_name?: string;
+      item_part_num?: string;
       quantity: number;
+      storage_id?: number;
+      storage_name?: string;
     }>;
   };
 }
 
 export async function getItemInventory(catalog_number: string): Promise<ItemInventory> {
-  // Step 1: resolve catalog_number → item_id via Item.List
+  // Item.List with item_part_num returns one row per storage, each with quantity
   const listRes = await rivhitPost<ItemListRaw>("Item.List", {
-    catalog_number,
-    rows_limit: 5,
+    item_part_num: catalog_number,
+    rows_limit: 50,
   });
-  console.log("[Rivhit] Item.List search for catalog_number=" + catalog_number + ":", JSON.stringify(listRes));
 
-  // Also fetch first 20 items without filter to see what exists in Rivhit
-  const allItemsRes = await rivhitPost<ItemListRaw>("Item.List", { rows_limit: 20 });
-  console.log("[Rivhit] Item.List (first 20, no filter):", JSON.stringify(allItemsRes));
+  const rows = (listRes.data?.item_list ?? []).filter((r) => r.item_id !== 0);
 
-  const item = listRes.data?.item_list?.find(i => i.item_id !== 0);
-  if (!item) {
-    console.log("[Rivhit] No real item found for catalog_number=" + catalog_number + " (only free-text / item_id=0 returned)");
-    return { catalog_number, total_quantity: 0, storages: [], _debug: { listResponse: listRes, allItems: allItemsRes } } as unknown as ItemInventory;
+  if (rows.length === 0) {
+    return { catalog_number, total_quantity: 0, storages: [] };
   }
 
-  const [qtyRes, storageRes] = await Promise.allSettled([
-    rivhitPost("Item.Quantity", { item_id: item.item_id }),
-    rivhitPost("Item.StorageReport", { item_id: item.item_id }),
-  ]);
+  const storages: ItemStorageEntry[] = rows
+    .filter((r) => r.storage_id != null)
+    .map((r) => ({
+      storage_id: r.storage_id!,
+      storage_name: r.storage_name ?? String(r.storage_id),
+      quantity: r.quantity ?? 0,
+    }));
 
-  console.log("[Rivhit] Item.Quantity raw:", qtyRes.status === "fulfilled" ? JSON.stringify(qtyRes.value) : qtyRes.reason);
-  console.log("[Rivhit] Item.StorageReport raw:", storageRes.status === "fulfilled" ? JSON.stringify(storageRes.value) : storageRes.reason);
+  const total_quantity = storages.reduce((sum, s) => sum + s.quantity, 0);
 
-  return {
-    catalog_number,
-    total_quantity: 0,
-    storages: [],
-    _debug: {
-      item,
-      quantity: qtyRes.status === "fulfilled" ? qtyRes.value : null,
-      storageReport: storageRes.status === "fulfilled" ? storageRes.value : null,
-      allItems: allItemsRes,
-    },
-  } as unknown as ItemInventory;
+  return { catalog_number, total_quantity, storages };
 }
