@@ -256,26 +256,35 @@ interface ItemListRaw {
 }
 
 export async function getItemInventory(catalog_number: string): Promise<ItemInventory> {
-  // Item.List with item_part_num returns one row per storage, each with quantity
+  // Item.List with item_part_num returns one row per storage for matching catalog items.
+  // If the part number doesn't exist, Rivhit returns all items — so we must filter by exact match.
   const listRes = await rivhitPost<ItemListRaw>("Item.List", {
     item_part_num: catalog_number,
     rows_limit: 50,
   });
 
-  const rows = (listRes.data?.item_list ?? []).filter((r) => r.item_id !== 0);
+  const rows = (listRes.data?.item_list ?? []).filter(
+    (r) => r.item_id !== 0 && r.item_part_num === catalog_number,
+  );
 
   if (rows.length === 0) {
     return { catalog_number, total_quantity: 0, storages: [] };
   }
 
-  const storages: ItemStorageEntry[] = rows
-    .filter((r) => r.storage_id != null)
-    .map((r) => ({
-      storage_id: r.storage_id!,
-      storage_name: r.storage_name ?? String(r.storage_id),
-      quantity: r.quantity ?? 0,
-    }));
+  // Collapse to one entry per storage_id (take first occurrence)
+  const seenStorages = new Map<number, ItemStorageEntry>();
+  for (const r of rows) {
+    const sid = r.storage_id ?? 0;
+    if (!seenStorages.has(sid)) {
+      seenStorages.set(sid, {
+        storage_id: sid,
+        storage_name: r.storage_name ?? String(sid),
+        quantity: r.quantity ?? 0,
+      });
+    }
+  }
 
+  const storages = Array.from(seenStorages.values());
   const total_quantity = storages.reduce((sum, s) => sum + s.quantity, 0);
 
   return { catalog_number, total_quantity, storages };
