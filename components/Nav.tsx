@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/", label: "לוח בקרה" },
   { href: "/warehouses", label: "מחסנים ובונוסים" },
+  { href: "/import", label: "תכנון יבוא ומכירות" },
 ];
 
 export default function Nav() {
