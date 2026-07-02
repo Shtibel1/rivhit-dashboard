@@ -8,6 +8,14 @@ frontend:
       commands:
         - echo "RIVHIT_API_TOKEN=$RIVHIT_API_TOKEN" >> .env.production
         - echo "EXTENSION_API_KEY=$EXTENSION_API_KEY" >> .env.production
+        - echo "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" >> .env.production
+        - echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" >> .env.production
+        - echo "TWILIO_ACCOUNT_SID=$TWILIO_ACCOUNT_SID" >> .env.production
+        - echo "TWILIO_AUTH_TOKEN=$TWILIO_AUTH_TOKEN" >> .env.production
+        - echo "TWILIO_PHONE_NUMBER=$TWILIO_PHONE_NUMBER" >> .env.production
+        - echo "ALERT_RECIPIENT_PHONES=$ALERT_RECIPIENT_PHONES" >> .env.production
+        - echo "TWILIO_CONTENT_SID=$TWILIO_CONTENT_SID" >> .env.production
+        - echo "GEMINI_API_KEY=$GEMINI_API_KEY" >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
