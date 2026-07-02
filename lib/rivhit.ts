@@ -249,6 +249,8 @@ interface ItemListRaw {
       item_name?: string;
       item_part_num?: string;
       quantity: number;
+      cost_nis?: number;
+      sale_nis?: number;
       storage_id?: number;
       storage_name?: string;
     }>;
@@ -289,3 +291,17 @@ export async function getItemInventory(catalog_number: string): Promise<ItemInve
 
   return { catalog_number, total_quantity, storages };
 }
+
+// Fetch all items from Rivhit for database synchronization
+export async function getAllItems(rows_limit: number = 1000): Promise<Array<{
+  item_id: number;
+  item_name?: string;
+  item_part_num?: string;
+  quantity: number;
+  cost_nis?: number;
+  sale_nis?: number;
+}>> {
+  const res = await rivhitPost<ItemListRaw>("Item.List", { rows_limit });
+  return res.data?.item_list ?? [];
+}
+
