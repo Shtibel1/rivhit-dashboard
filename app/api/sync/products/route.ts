@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     const upsertData = filteredItems.map((item) => ({
       item_id: item.item_id,
       sku: item.item_part_num || "",
-      name: item.item_name,
+      name: item.item_name || "",
       cost_price: item.cost_nis || 0,
       sale_price: item.sale_nis || 0,
       stock_quantity: item.quantity || 0,
