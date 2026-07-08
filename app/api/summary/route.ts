@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
         console.log(`Syncing ${docs.length} documents and ${pays.length} payments to Supabase...`);
 
-        // Upsert documents
+        // Upsert documents in chunks to avoid payload size/timeout limits
         if (docs.length > 0) {
           const docUpserts = docs.map((d) => ({
             document_number: d.document_number,
@@ -49,10 +49,19 @@ export async function GET(req: NextRequest) {
             document_link: d.document_link || null,
           }));
 
-          await supabase.from("documents").upsert(docUpserts, { onConflict: "document_type,document_number" });
+          const docChunkSize = 1000;
+          for (let i = 0; i < docUpserts.length; i += docChunkSize) {
+            const chunk = docUpserts.slice(i, i + docChunkSize);
+            const { error } = await supabase
+              .from("documents")
+              .upsert(chunk, { onConflict: "document_type,document_number" });
+            if (error) {
+              throw new Error(`Documents upsert failed: ${error.message}`);
+            }
+          }
         }
 
-        // Upsert payments
+        // Upsert payments in chunks to avoid payload size/timeout limits
         if (pays.length > 0) {
           const payUpserts = pays.map((p) => {
             const isoDate = parseRivhitDate(p.receipt_date);
@@ -72,7 +81,16 @@ export async function GET(req: NextRequest) {
             };
           });
 
-          await supabase.from("payments").upsert(payUpserts, { onConflict: "unique_key" });
+          const payChunkSize = 1000;
+          for (let i = 0; i < payUpserts.length; i += payChunkSize) {
+            const chunk = payUpserts.slice(i, i + payChunkSize);
+            const { error } = await supabase
+              .from("payments")
+              .upsert(chunk, { onConflict: "unique_key" });
+            if (error) {
+              throw new Error(`Payments upsert failed: ${error.message}`);
+            }
+          }
         }
       } catch (syncErr) {
         console.error("Incremental sync during summary fetch failed:", syncErr);

@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useState, useCallback } from "react";
+import { subMonths, startOfMonth, endOfMonth, format } from "date-fns";
 import {
   ResponsiveContainer,
   BarChart,
@@ -71,6 +72,7 @@ export default function ImportPlanningPage() {
 
   // Sync state
   const [isSyncOpen, setIsSyncOpen] = useState(false);
+  const [fastSync, setFastSync] = useState(true);
   const [syncStatus, setSyncStatus] = useState<{
     products: { loading: boolean; progress: string; error: string | null };
     sales: { loading: boolean; progress: string; error: string | null };
@@ -129,7 +131,7 @@ export default function ImportPlanningPage() {
     }
   };
 
-  // Sync Sales in batches
+  // Sync Sales in batches month-by-month (6 months)
   const handleSyncSales = async () => {
     setSyncStatus((prev) => ({
       ...prev,
@@ -137,47 +139,99 @@ export default function ImportPlanningPage() {
     }));
 
     try {
-      let hasMore = true;
+      const now = new Date();
       let syncedTotal = 0;
-      let lastRemainingCount: number | null = null;
 
-      while (hasMore) {
-        const res = await fetch("/api/sync/sales", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Sales sync failed");
+      // Loop from 5 months ago down to 0 (current month)
+      for (let i = 5; i >= 0; i--) {
+        const targetMonthDate = subMonths(now, i);
+        const startOfTargetMonth = startOfMonth(targetMonthDate);
+        const endOfTargetMonth = endOfMonth(targetMonthDate);
 
-        syncedTotal += data.syncedCount || 0;
-        hasMore = data.hasMore;
+        const from_date = format(startOfTargetMonth, "dd/MM/yyyy");
+        const until_date = format(endOfTargetMonth, "dd/MM/yyyy");
+        const monthLabel = format(targetMonthDate, "MM/yyyy");
 
-        const remaining = data.remainingCount;
-        console.log(`Sales batch sync progress: syncedCount=${data.syncedCount}, remainingCount=${remaining}, hasMore=${hasMore}`);
-
-        if (lastRemainingCount !== null && remaining === lastRemainingCount && remaining > 0) {
-          const errorMsg = `הסנכרון נתקע בלולאה: מספר המסמכים הנותרים (${remaining}) לא קטן מהאיטרציה הקודמת. אנא בדוק את לוג השרת.`;
-          console.error(errorMsg);
-          throw new Error(errorMsg);
-        }
-        lastRemainingCount = remaining;
+        let hasMoreForMonth = true;
+        let syncedForMonth = 0;
+        let lastRemainingCount: number | null = null;
 
         setSyncStatus((prev) => ({
           ...prev,
           sales: {
             loading: true,
-            progress: `סונכרנו ${syncedTotal} מסמכים. נותרו עוד ${remaining}...`,
+            progress: `בודק / מסנכרן את חודש ${monthLabel}...`,
             error: null,
           },
         }));
 
-        if (!hasMore) break;
+        while (hasMoreForMonth) {
+          const res = await fetch("/api/sync/sales", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              from_date,
+              until_date,
+              force: !fastSync,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Sales sync failed for month ${monthLabel}`);
+
+          if (data.skipped) {
+            // This month is already synced and skipped. Move to the next month.
+            console.log(`Month ${monthLabel} was skipped since it is already synced.`);
+            setSyncStatus((prev) => ({
+              ...prev,
+              sales: {
+                loading: true,
+                progress: `חודש ${monthLabel} כבר מסונכרן ב-Supabase (הסנכרון דולג לשמירה על מהירות ומניעת כפילויות).`,
+                error: null,
+              },
+            }));
+            hasMoreForMonth = false;
+            break;
+          }
+
+          syncedForMonth += data.syncedCount || 0;
+          syncedTotal += data.syncedCount || 0;
+          hasMoreForMonth = data.hasMore;
+
+          const remaining = data.remainingCount;
+          console.log(`Sales batch sync progress for ${monthLabel}: syncedCount=${data.syncedCount}, remainingCount=${remaining}, hasMore=${hasMoreForMonth}`);
+
+          if (lastRemainingCount !== null && remaining === lastRemainingCount && remaining > 0) {
+            const errorMsg = `הסנכרון נתקע בלולאה עבור חודש ${monthLabel}: מספר המסמכים הנותרים (${remaining}) לא קטן מהאיטרציה הקודמת.`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+          }
+          lastRemainingCount = remaining;
+
+          if (hasMoreForMonth) {
+            setSyncStatus((prev) => ({
+              ...prev,
+              sales: {
+                loading: true,
+                progress: `חודש ${monthLabel}: סונכרנו ${syncedForMonth} מסמכים. נותרו עוד ${remaining}...`,
+                error: null,
+              },
+            }));
+          } else {
+            setSyncStatus((prev) => ({
+              ...prev,
+              sales: {
+                loading: true,
+                progress: `חודש ${monthLabel} הושלם! סונכרנו ${syncedForMonth} מסמכים.`,
+                error: null,
+              },
+            }));
+          }
+        }
       }
 
       setSyncStatus((prev) => ({
         ...prev,
-        sales: { loading: false, progress: "סנכרון מכירות הושלם בהצלחה!", error: null },
+        sales: { loading: false, progress: `סנכרון מכירות הושלם בהצלחה! סונכרנו ${syncedTotal} מסמכים סה"כ.`, error: null },
       }));
       loadData();
     } catch (err) {
@@ -614,6 +668,21 @@ export default function ImportPlanningPage() {
                     {syncStatus.sales.loading ? "בסנכרון..." : "סנכרן מכירות"}
                   </button>
                 </div>
+
+                <div className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-100 w-fit">
+                  <input
+                    type="checkbox"
+                    id="sales-fast-sync-check"
+                    checked={fastSync}
+                    onChange={(e) => setFastSync(e.target.checked)}
+                    disabled={syncStatus.sales.loading}
+                    className="w-3.5 h-3.5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="sales-fast-sync-check" className="text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                    סנכרון מהיר (דלג על חודשים שכבר סונכרנו)
+                  </label>
+                </div>
+
                 {syncStatus.sales.progress && (
                   <p className="text-xs text-emerald-600 font-bold bg-emerald-50 px-3 py-2 rounded-xl">
                     {syncStatus.sales.progress}

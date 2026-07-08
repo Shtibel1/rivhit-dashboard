@@ -59,6 +59,7 @@ export default function DashboardPage() {
 
   // Sync state
   const [isSyncOpen, setIsSyncOpen] = useState(false);
+  const [fastSync, setFastSync] = useState(true);
   const [syncStatus, setSyncStatus] = useState<{
     loading: boolean;
     progress: string;
@@ -138,16 +139,24 @@ export default function DashboardPage() {
         const resMonth = await fetch("/api/sync/dashboard", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "month", monthOffset: i }),
+          body: JSON.stringify({ action: "month", monthOffset: i, force: !fastSync }),
         });
         if (!resMonth.ok) throw new Error(`סנכרון מסמכים עבור חודש offset ${i} נכשל`);
         const monthData = await resMonth.json();
         
-        setSyncStatus({
-          loading: true,
-          progress: `שלב 2/2: סונכרן חודש ${monthData.monthLabel}. סונכרנו ${monthData.documentsCount} מסמכים ו-${monthData.paymentsCount} תשלומים...`,
-          error: null,
-        });
+        if (monthData.skipped) {
+          setSyncStatus({
+            loading: true,
+            progress: `שלב 2/2: חודש ${monthData.monthLabel} כבר מסונכרן (הסנכרון דולג לשמירה על מהירות ומניעת כפילויות).`,
+            error: null,
+          });
+        } else {
+          setSyncStatus({
+            loading: true,
+            progress: `שלב 2/2: סונכרן חודש ${monthData.monthLabel}. סונכרנו ${monthData.documentsCount} מסמכים ו-${monthData.paymentsCount} תשלומים...`,
+            error: null,
+          });
+        }
       }
 
       setSyncStatus({ loading: false, progress: "הסנכרון הושלם בהצלחה!", error: null });
@@ -292,6 +301,20 @@ export default function DashboardPage() {
                 <p className="text-sm text-slate-600 leading-relaxed">
                   הסנכרון מייבא את כל הלקוחות הנוכחיים וכן את כל המסמכים והתשלומים עבור 12 החודשים האחרונים. סנכרון זה יאפשר ללוח הבקרה להיטען באופן מיידי.
                 </p>
+
+                <div className="flex items-center gap-2 justify-center bg-slate-50 p-3 rounded-2xl border border-slate-100 my-1">
+                  <input
+                    type="checkbox"
+                    id="fast-sync-check"
+                    checked={fastSync}
+                    onChange={(e) => setFastSync(e.target.checked)}
+                    disabled={syncStatus.loading}
+                    className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="fast-sync-check" className="text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    סנכרון מהיר (דלג על חודשי עבר שכבר סונכרנו)
+                  </label>
+                </div>
 
                 <button
                   onClick={handleSyncDashboard}

@@ -9,6 +9,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}));
     const action = body.action; // "customers" | "month"
     const monthOffset = typeof body.monthOffset === "number" ? body.monthOffset : 0;
+    const force = !!body.force;
 
     const cookieStore = await cookies();
     const supabase = createClient(cookieStore);
@@ -58,6 +59,29 @@ export async function POST(req: NextRequest) {
 
       const from_date = format(startOfTargetMonth, "dd/MM/yyyy");
       const until_date = format(endOfTargetMonth, "dd/MM/yyyy");
+
+      // Check if we already have documents for this month to avoid double syncing
+      if (!force && monthOffset > 0) {
+        const startOfTargetMonthIso = format(startOfTargetMonth, "yyyy-MM-01");
+        const endOfTargetMonthIso = format(endOfTargetMonth, "yyyy-MM-dd");
+
+        const { count, error: countError } = await supabase
+          .from("documents")
+          .select("document_number", { count: "exact", head: true })
+          .gte("document_date", startOfTargetMonthIso)
+          .lte("document_date", endOfTargetMonthIso);
+
+        if (!countError && count !== null && count > 0) {
+          console.log(`Month offset ${monthOffset} (${format(targetMonthDate, "yyyy-MM")}) is already synced (${count} documents). Skipping...`);
+          return NextResponse.json({
+            success: true,
+            skipped: true,
+            documentsCount: count,
+            paymentsCount: 0,
+            monthLabel: format(targetMonthDate, "MM/yyyy"),
+          });
+        }
+      }
 
       console.log(`Syncing documents and payments for month offset ${monthOffset} (${from_date} to ${until_date})...`);
 

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDocuments, getDocumentDetails, parseRivhitDate } from "@/lib/rivhit";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
-import { subMonths, format } from "date-fns";
+import { subMonths, format, startOfMonth } from "date-fns";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +15,39 @@ export async function POST(req: NextRequest) {
 
     const from_date = body.from_date || defaultFromDate;
     const until_date = body.until_date || defaultUntilDate;
+    const force = !!body.force;
     const batchSize = 40; // Safe batch size to prevent API and server timeouts
+
+    const fromDateIso = parseRivhitDate(from_date);
+    const untilDateIso = parseRivhitDate(until_date);
+
+    const cookieStore = await cookies();
+    const supabase = createClient(cookieStore);
+
+    // Skip historical months if they are already synced (and force is false)
+    if (!force) {
+      const untilDate = new Date(untilDateIso);
+      const startOfCurrentMonth = startOfMonth(new Date());
+      if (untilDate < startOfCurrentMonth) {
+        const { count, error: countError } = await supabase
+          .from("sales_items")
+          .select("id", { count: "exact", head: true })
+          .gte("document_date", fromDateIso)
+          .lte("document_date", untilDateIso);
+
+        if (!countError && count !== null && count > 0) {
+          console.log(`Sales items for range ${from_date} to ${until_date} are already synced (${count} items). Skipping...`);
+          return NextResponse.json({
+            success: true,
+            skipped: true,
+            syncedCount: 0,
+            remainingCount: 0,
+            hasMore: false,
+            message: `Sales items for ${from_date} to ${until_date} already synced (skipped).`
+          });
+        }
+      }
+    }
 
     console.log(`Syncing sales documents from ${from_date} to ${until_date}...`);
 
@@ -33,13 +65,8 @@ export async function POST(req: NextRequest) {
 
     console.log(`Found ${allSalesDocs.length} active sales documents in Rivhit.`);
 
-    const cookieStore = await cookies();
-    const supabase = createClient(cookieStore);
-
     // 2. Query already synced documents from Supabase to avoid duplicating requests.
     // We filter by date range and use pagination to bypass Supabase's default 1,000-row limit.
-    const fromDateIso = parseRivhitDate(from_date);
-    const untilDateIso = parseRivhitDate(until_date);
 
     let existingDocs: { document_number: number; document_type: number }[] = [];
     let page = 0;

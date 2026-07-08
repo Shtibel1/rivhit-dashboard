@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/", label: "לוח בקרה" },
   { href: "/warehouses", label: "מחסנים ובונוסים" },
   { href: "/import", label: "תכנון יבוא ומכירות" },
+  { href: "/inventory", label: "ניהול מלאי" },
 ];
 
 export default function Nav() {
