@@ -99,14 +99,14 @@ export default function RevenueChart({
               labelStyle={{ direction: "rtl" }}
               contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 24px rgba(0,0,0,.08)" }}
             />
-            <Legend
+            {/* <Legend
               iconType="circle"
               wrapperStyle={{ fontSize: 12, paddingTop: 10, direction: "rtl" }}
-            />
+            /> */}
             <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} name="הכנסות" />
-            {!isDaily && (
+            {/* {!isDaily && (
               <Bar dataKey="profit" fill="#10b981" radius={[4, 4, 0, 0]} name="רווח" />
-            )}
+            )} */}
           </BarChart>
         </ResponsiveContainer>
       )}

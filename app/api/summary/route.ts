@@ -4,6 +4,62 @@ import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { subDays, format } from "date-fns";
 
+async function fetchAllDocuments(supabase: any, fromDate?: string, untilDate?: string) {
+  let allDocs: any[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase.from("documents").select("*");
+    if (fromDate) query = query.gte("document_date", fromDate);
+    if (untilDate) query = query.lte("document_date", untilDate);
+    
+    const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw new Error(error.message);
+    
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allDocs = allDocs.concat(data);
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+  }
+  return allDocs;
+}
+
+async function fetchAllPayments(supabase: any, fromDate?: string, untilDate?: string) {
+  let allPays: any[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+
+  while (hasMore) {
+    let query = supabase.from("payments").select("*");
+    if (fromDate) query = query.gte("receipt_date", fromDate);
+    if (untilDate) query = query.lte("receipt_date", untilDate);
+    
+    const { data, error } = await query.range(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw new Error(error.message);
+    
+    if (!data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allPays = allPays.concat(data);
+      if (data.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+  }
+  return allPays;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -109,30 +165,12 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 1. Fetch from Supabase
-    let queryDocs = supabase.from("documents").select("*").limit(50000);
-    let queryPays = supabase.from("payments").select("*").limit(50000);
-
-    if (from_date) {
-      queryDocs = queryDocs.gte("document_date", from_date);
-      queryPays = queryPays.gte("receipt_date", from_date);
-    }
-    if (until_date) {
-      queryDocs = queryDocs.lte("document_date", until_date);
-      queryPays = queryPays.lte("receipt_date", until_date);
-    }
-
-    const [docsRes, paysRes, custsCountRes] = await Promise.all([
-      queryDocs,
-      queryPays,
+    // 1. Fetch from Supabase (using pagination to bypass PostgREST max_rows = 1000 limit)
+    const [docs, pays, custsCountRes] = await Promise.all([
+      fetchAllDocuments(supabase, from_date, until_date),
+      fetchAllPayments(supabase, from_date, until_date),
       supabase.from("customers").select("*", { count: "exact", head: true }),
     ]);
-
-    if (docsRes.error) throw new Error(docsRes.error.message);
-    if (paysRes.error) throw new Error(paysRes.error.message);
-
-    const docs = docsRes.data || [];
-    const pays = paysRes.data || [];
     const totalCustomers = custsCountRes.count || 0;
 
     const activeDocs = docs.filter((d) => !d.is_cancelled);
