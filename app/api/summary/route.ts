@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDocuments, getPaymentReport, parseRivhitDate } from "@/lib/rivhit";
+import { getDocuments, getPaymentReport, getPnLReport, parseRivhitDate } from "@/lib/rivhit";
 import { createClient } from "@/utils/supabase/server";
 import { cookies } from "next/headers";
 import { subDays, format } from "date-fns";
@@ -32,23 +32,31 @@ export async function GET(req: NextRequest) {
 
         // Upsert documents in chunks to avoid payload size/timeout limits
         if (docs.length > 0) {
-          const docUpserts = docs.map((d) => ({
-            document_number: d.document_number,
-            document_type: d.document_type,
-            document_type_name: d.document_type_name || "מסמך",
-            sort_code: d.sort_code || 0,
-            document_date: parseRivhitDate(d.document_date),
-            customer_id: d.customer_id,
-            customer_name: d.customer_name || null,
-            amount: d.amount || 0,
-            total_vat: d.total_vat || 0,
-            is_cancelled: d.is_cancelled || false,
-            is_closed: d.is_closed || false,
-            reference: d.reference || null,
-            comments: d.comments || null,
-            document_link: d.document_link || null,
-          }));
+          const docUpsertsMap = new Map();
+          for (const d of docs) {
+            const docType = d.document_type;
+            const docNum = d.document_number;
+            const key = `${docType}_${docNum}`;
+            
+            docUpsertsMap.set(key, {
+              document_number: docNum,
+              document_type: docType,
+              document_type_name: d.document_type_name || "מסמך",
+              sort_code: d.sort_code || 0,
+              document_date: parseRivhitDate(d.document_date),
+              customer_id: d.customer_id,
+              customer_name: d.customer_name || null,
+              amount: d.amount || 0,
+              total_vat: d.total_vat || 0,
+              is_cancelled: d.is_cancelled || false,
+              is_closed: d.is_closed || false,
+              reference: d.reference || null,
+              comments: d.comments || null,
+              document_link: d.document_link || null,
+            });
+          }
 
+          const docUpserts = Array.from(docUpsertsMap.values());
           const docChunkSize = 1000;
           for (let i = 0; i < docUpserts.length; i += docChunkSize) {
             const chunk = docUpserts.slice(i, i + docChunkSize);
@@ -63,11 +71,13 @@ export async function GET(req: NextRequest) {
 
         // Upsert payments in chunks to avoid payload size/timeout limits
         if (pays.length > 0) {
-          const payUpserts = pays.map((p) => {
+          const payUpsertsMap = new Map();
+          for (const p of pays) {
             const isoDate = parseRivhitDate(p.receipt_date);
             const ref = p.reference || "";
             const key = `${p.receipt_type}_${p.receipt_number}_${p.payment_type}_${p.amount}_${isoDate}_${ref}`;
-            return {
+
+            payUpsertsMap.set(key, {
               receipt_date: isoDate,
               payment_type: p.payment_type,
               amount: p.amount || 0,
@@ -78,9 +88,10 @@ export async function GET(req: NextRequest) {
               receipt_type: p.receipt_type,
               reference: p.reference || null,
               unique_key: key,
-            };
-          });
+            });
+          }
 
+          const payUpserts = Array.from(payUpsertsMap.values());
           const payChunkSize = 1000;
           for (let i = 0; i < payUpserts.length; i += payChunkSize) {
             const chunk = payUpserts.slice(i, i + payChunkSize);
@@ -99,8 +110,8 @@ export async function GET(req: NextRequest) {
     }
 
     // 1. Fetch from Supabase
-    let queryDocs = supabase.from("documents").select("*");
-    let queryPays = supabase.from("payments").select("*");
+    let queryDocs = supabase.from("documents").select("*").limit(50000);
+    let queryPays = supabase.from("payments").select("*").limit(50000);
 
     if (from_date) {
       queryDocs = queryDocs.gte("document_date", from_date);
@@ -127,8 +138,9 @@ export async function GET(req: NextRequest) {
     const activeDocs = docs.filter((d) => !d.is_cancelled);
 
     // Revenue = all non-cancelled docs that have the word "חשבונית" in their type name
+    // (includes credits which have negative amounts to naturally subtract them)
     const invoiceDocs = activeDocs.filter((d) =>
-      d.document_type_name?.includes("חשבונית") && !d.document_type_name?.includes("זיכוי")
+      d.document_type_name?.includes("חשבונית")
     );
     const totalRevenue = invoiceDocs.reduce((sum, d) => sum + (d.amount ?? 0), 0);
 
@@ -147,6 +159,60 @@ export async function GET(req: NextRequest) {
       if (iso) revenueByDay[iso] = (revenueByDay[iso] ?? 0) + (d.amount ?? 0);
     });
 
+    const profitByMonth: Record<string, number> = {};
+
+    if (from_date && until_date) {
+      try {
+        const start = new Date(from_date);
+        const end = new Date(until_date);
+        const monthsList: { year: number; month: number; label: string }[] = [];
+        
+        let curr = new Date(start.getFullYear(), start.getMonth(), 1);
+        while (curr <= end) {
+          const year = curr.getFullYear();
+          const month = curr.getMonth() + 1;
+          const monthStr = String(month).padStart(2, "0");
+          monthsList.push({
+            year,
+            month,
+            label: `${year}-${monthStr}`
+          });
+          curr.setMonth(curr.getMonth() + 1);
+        }
+        
+        // Fetch PnL in parallel (limit to last 12 months for safety)
+        const pnlPromises = monthsList.slice(-12).map(async (m) => {
+          try {
+            const report = await getPnLReport({
+              from_month: m.month,
+              to_month: m.month,
+              year: m.year
+            });
+            let income = 0;
+            let expenses = 0;
+            report.forEach(item => {
+              if (item.pnl_code === 70 || item.pnl_code === 71) {
+                income += -item.balance;
+              } else if (item.pnl_code === 80 || item.pnl_code === 81 || item.pnl_code === 90) {
+                expenses += item.balance;
+              }
+            });
+            return { label: m.label, profit: income - expenses };
+          } catch (e) {
+            console.error(`Failed to fetch PnL for ${m.label}:`, e);
+            return { label: m.label, profit: 0 };
+          }
+        });
+        
+        const pnlResults = await Promise.all(pnlPromises);
+        pnlResults.forEach(r => {
+          profitByMonth[r.label] = r.profit;
+        });
+      } catch (err) {
+        console.error("Failed to calculate monthly profits:", err);
+      }
+    }
+
     return NextResponse.json({
       totalRevenue,
       openDocuments: openDocs,
@@ -154,6 +220,7 @@ export async function GET(req: NextRequest) {
       totalPayments,
       revenueByMonth,
       revenueByDay,
+      profitByMonth,
     });
   } catch (err) {
     console.error("Summary API GET exception:", err);

@@ -85,7 +85,12 @@ export async function getDocuments(params: {
   customer_id?: number;
   rows_limit?: number;
 } = {}): Promise<Document[]> {
-  const res = await rivhitPost<DocumentListRaw>("Document.List", params);
+  const { until_date, ...rest } = params;
+  const apiParams = {
+    ...rest,
+    to_date: until_date || (rest as any).to_date,
+  };
+  const res = await rivhitPost<DocumentListRaw>("Document.List", apiParams);
   return res.data?.document_list ?? [];
 }
 
@@ -160,31 +165,41 @@ export async function getPaymentReport(params: {
   until_date?: string;
   rows_limit?: number;
 } = {}): Promise<PaymentReportItem[]> {
-  const res = await rivhitPost<PaymentReportRaw>("Payment.Report", params);
+  const apiParams: Record<string, any> = {};
+  if (params.from_date) {
+    apiParams.from_production_date = params.from_date.replace(/\//g, "-");
+  }
+  if (params.until_date) {
+    apiParams.to_production_date = params.until_date.replace(/\//g, "-");
+  }
+  const res = await rivhitPost<PaymentReportRaw>("Payment.Report", apiParams);
   return res.data?.payments ?? [];
 }
 
 // ---- PnL ----
 
-export interface PnLReport {
-  income: number;
-  expenses: number;
-  profit: number;
-  vat_income?: number;
-  vat_expenses?: number;
+export interface PnLReportItem {
+  account_id: number;
+  account_name: string;
+  balance: number;
+  pnl_code: number;
+  pnl_name: string;
 }
 
 interface PnLResponse {
   error_code: number;
-  data: PnLReport;
+  data: {
+    pnl_report: PnLReportItem[];
+  };
 }
 
 export async function getPnLReport(params: {
-  from_date?: string;
-  until_date?: string;
-} = {}): Promise<PnLReport | null> {
+  from_month: number;
+  to_month: number;
+  year: number;
+}): Promise<PnLReportItem[]> {
   const res = await rivhitPost<PnLResponse>("Accounting.PnLReport", params);
-  return res.data ?? null;
+  return res.data?.pnl_report ?? [];
 }
 
 // ---- Document Details ----

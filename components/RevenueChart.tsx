@@ -7,6 +7,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  Legend,
   ResponsiveContainer,
 } from "recharts";
 
@@ -36,11 +37,18 @@ function formatILS(v: number) {
 interface Props {
   revenueByMonth: Record<string, number> | undefined;
   revenueByDay: Record<string, number> | undefined;
+  profitByMonth: Record<string, number> | undefined;
   dateRange: string;
   loading: boolean;
 }
 
-export default function RevenueChart({ revenueByMonth, revenueByDay, dateRange, loading }: Props) {
+export default function RevenueChart({
+  revenueByMonth,
+  revenueByDay,
+  profitByMonth,
+  dateRange,
+  loading,
+}: Props) {
   const isDaily = dateRange === "1m";
 
   const data = isDaily
@@ -49,9 +57,13 @@ export default function RevenueChart({ revenueByMonth, revenueByDay, dateRange, 
         .map(([key, value]) => ({ name: formatDayLabel(key), revenue: value }))
     : Object.entries(revenueByMonth ?? {})
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([key, value]) => ({ name: formatMonthLabel(key), revenue: value }));
+        .map(([key, value]) => ({
+          name: formatMonthLabel(key),
+          revenue: value,
+          profit: profitByMonth?.[key] ?? 0,
+        }));
 
-  const title = isDaily ? "הכנסות לפי יום" : "הכנסות לפי חודש";
+  const title = isDaily ? "הכנסות לפי יום" : "הכנסות ורווח לפי חודש";
 
   return (
     <div className="bg-white rounded-2xl shadow-sm p-6">
@@ -61,7 +73,7 @@ export default function RevenueChart({ revenueByMonth, revenueByDay, dateRange, 
       ) : data.length === 0 ? (
         <div className="h-52 flex items-center justify-center text-slate-400">אין נתונים</div>
       ) : (
-        <ResponsiveContainer width="100%" height={210}>
+        <ResponsiveContainer width="100%" height={240}>
           <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
             <XAxis
@@ -87,7 +99,14 @@ export default function RevenueChart({ revenueByMonth, revenueByDay, dateRange, 
               labelStyle={{ direction: "rtl" }}
               contentStyle={{ borderRadius: 12, border: "none", boxShadow: "0 4px 24px rgba(0,0,0,.08)" }}
             />
-            <Bar dataKey="revenue" fill="#6366f1" radius={[6, 6, 0, 0]} name="הכנסות" />
+            <Legend
+              iconType="circle"
+              wrapperStyle={{ fontSize: 12, paddingTop: 10, direction: "rtl" }}
+            />
+            <Bar dataKey="revenue" fill="#6366f1" radius={[4, 4, 0, 0]} name="הכנסות" />
+            {!isDaily && (
+              <Bar dataKey="profit" fill="#10b981" radius={[4, 4, 0, 0]} name="רווח" />
+            )}
           </BarChart>
         </ResponsiveContainer>
       )}

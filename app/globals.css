@@ -5,9 +5,17 @@
   --foreground: #0f172a;
 }
 
+@theme {
+  --font-sans: var(--font-rubik), 'Segoe UI', Arial, sans-serif;
+}
+
+body, h1, h2, h3, h4, h5, h6, input, select, textarea, button {
+  font-family: var(--font-rubik), 'Segoe UI', Arial, sans-serif;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Segoe UI', Arial, sans-serif;
   direction: rtl;
 }
+

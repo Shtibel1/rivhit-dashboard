@@ -19,6 +19,7 @@ interface Summary {
   totalPayments: number;
   revenueByMonth: Record<string, number>;
   revenueByDay: Record<string, number>;
+  profitByMonth: Record<string, number>;
 }
 
 function getDateRange(range: DateRange): { from_date: string; until_date: string } {
@@ -247,6 +248,7 @@ export default function DashboardPage() {
         <RevenueChart
           revenueByMonth={summary?.revenueByMonth}
           revenueByDay={summary?.revenueByDay}
+          profitByMonth={summary?.profitByMonth}
           dateRange={dateRange}
           loading={summaryLoading}
         />

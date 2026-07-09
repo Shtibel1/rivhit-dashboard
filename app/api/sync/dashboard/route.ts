@@ -95,23 +95,31 @@ export async function POST(req: NextRequest) {
 
       // 1. Sync Documents
       if (docs.length > 0) {
-        const docUpserts = docs.map((d) => ({
-          document_number: d.document_number,
-          document_type: d.document_type,
-          document_type_name: d.document_type_name || "מסמך",
-          sort_code: d.sort_code || 0,
-          document_date: parseRivhitDate(d.document_date),
-          customer_id: d.customer_id,
-          customer_name: d.customer_name || null,
-          amount: d.amount || 0,
-          total_vat: d.total_vat || 0,
-          is_cancelled: d.is_cancelled || false,
-          is_closed: d.is_closed || false,
-          reference: d.reference || null,
-          comments: d.comments || null,
-          document_link: d.document_link || null,
-        }));
+        const docUpsertsMap = new Map();
+        for (const d of docs) {
+          const docType = d.document_type;
+          const docNum = d.document_number;
+          const key = `${docType}_${docNum}`;
+          
+          docUpsertsMap.set(key, {
+            document_number: docNum,
+            document_type: docType,
+            document_type_name: d.document_type_name || "מסמך",
+            sort_code: d.sort_code || 0,
+            document_date: parseRivhitDate(d.document_date),
+            customer_id: d.customer_id,
+            customer_name: d.customer_name || null,
+            amount: d.amount || 0,
+            total_vat: d.total_vat || 0,
+            is_cancelled: d.is_cancelled || false,
+            is_closed: d.is_closed || false,
+            reference: d.reference || null,
+            comments: d.comments || null,
+            document_link: d.document_link || null,
+          });
+        }
 
+        const docUpserts = Array.from(docUpsertsMap.values());
         const chunkSize = 200;
         for (let i = 0; i < docUpserts.length; i += chunkSize) {
           const chunk = docUpserts.slice(i, i + chunkSize);
@@ -128,12 +136,13 @@ export async function POST(req: NextRequest) {
 
       // 2. Sync Payments
       if (pays.length > 0) {
-        const payUpserts = pays.map((p) => {
+        const payUpsertsMap = new Map();
+        for (const p of pays) {
           const isoDate = parseRivhitDate(p.receipt_date);
           const ref = p.reference || "";
           const key = `${p.receipt_type}_${p.receipt_number}_${p.payment_type}_${p.amount}_${isoDate}_${ref}`;
 
-          return {
+          payUpsertsMap.set(key, {
             receipt_date: isoDate,
             payment_type: p.payment_type,
             amount: p.amount || 0,
@@ -144,9 +153,10 @@ export async function POST(req: NextRequest) {
             receipt_type: p.receipt_type,
             reference: p.reference || null,
             unique_key: key,
-          };
-        });
+          });
+        }
 
+        const payUpserts = Array.from(payUpsertsMap.values());
         const chunkSize = 200;
         for (let i = 0; i < payUpserts.length; i += chunkSize) {
           const chunk = payUpserts.slice(i, i + chunkSize);

@@ -70,6 +70,52 @@ export default function ImportPlanningPage() {
   const [topProducts, setTopProducts] = useState<ProductSale[]>([]);
   const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
 
+  // Sorting state
+  type SortKey = "sku" | "name" | "category" | "unitsSold" | "revenue" | "stock_quantity" | "avgMonthlySales" | "suggestedOrder" | "orderUrgency";
+  const [sortKey, setSortKey] = useState<SortKey>("unitsSold"); // default sorted by units sold
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortKey(key);
+      setSortOrder("desc"); // default descending for new fields
+    }
+  };
+
+  const sortedProducts = [...topProducts].sort((a, b) => {
+    let valA = a[sortKey];
+    let valB = b[sortKey];
+
+    // Handle undefined/null values
+    if (valA === undefined || valA === null) return sortOrder === "asc" ? -1 : 1;
+    if (valB === undefined || valB === null) return sortOrder === "asc" ? 1 : -1;
+
+    // Custom sorting for order urgency: מיידי > בקרוב > אין צורך > אחר
+    if (sortKey === "orderUrgency") {
+      const urgencyOrderMap: Record<string, number> = {
+        "מיידי": 1,
+        "בקרוב": 2,
+        "אין צורך": 3
+      };
+      const weightA = urgencyOrderMap[valA as string] || 4;
+      const weightB = urgencyOrderMap[valB as string] || 4;
+      return sortOrder === "asc" ? weightA - weightB : weightB - weightA;
+    }
+
+    if (typeof valA === "string" && typeof valB === "string") {
+      return sortOrder === "asc"
+        ? valA.localeCompare(valB, "he")
+        : valB.localeCompare(valA, "he");
+    }
+
+    // Number comparisons
+    return sortOrder === "asc"
+      ? (valA as number) - (valB as number)
+      : (valB as number) - (valA as number);
+  });
+
   // Sync state
   const [isSyncOpen, setIsSyncOpen] = useState(false);
   const [fastSync, setFastSync] = useState(true);
@@ -534,19 +580,109 @@ export default function ImportPlanningPage() {
               <table className="w-full text-right border-collapse text-xs sm:text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-black text-xs">
-                    <th className="px-5 py-3.5">מק&quot;ט / SKU</th>
-                    <th className="px-5 py-3.5">שם דגם / מוצר</th>
-                    <th className="px-5 py-3.5">קטגוריה (AI)</th>
-                    <th className="px-5 py-3.5 text-center">יחידות שנמכרו</th>
-                    <th className="px-5 py-3.5 text-center">סה&quot;כ הכנסה (₪)</th>
-                    <th className="px-5 py-3.5 text-center">מלאי נוכחי</th>
-                    <th className="px-5 py-3.5 text-center">מכירה חודשית ממוצעת</th>
-                    <th className="px-5 py-3.5 text-center">הזמנה מומלצת</th>
-                    <th className="px-5 py-3.5 text-center">דחיפות</th>
+                    <th
+                      onClick={() => handleSort("sku")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none group"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>מק&quot;ט / SKU</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "sku" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "sku" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("name")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none group"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>שם דגם / מוצר</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "name" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "name" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("category")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none group"
+                    >
+                      <div className="flex items-center gap-1">
+                        <span>קטגוריה (AI)</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "category" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "category" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("unitsSold")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>יחידות שנמכרו</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "unitsSold" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "unitsSold" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("revenue")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>סה&quot;כ הכנסה (₪)</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "revenue" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "revenue" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("stock_quantity")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>מלאי נוכחי</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "stock_quantity" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "stock_quantity" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("avgMonthlySales")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>מכירה חודשית ממוצעת</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "avgMonthlySales" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "avgMonthlySales" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("suggestedOrder")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>הזמנה מומלצת</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "suggestedOrder" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "suggestedOrder" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
+                    <th
+                      onClick={() => handleSort("orderUrgency")}
+                      className="px-5 py-3.5 cursor-pointer hover:bg-slate-100 hover:text-slate-800 transition-colors select-none text-center group"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span>דחיפות</span>
+                        <span className={`text-[10px] transition-opacity ${sortKey === "orderUrgency" ? "text-indigo-600 opacity-100 font-bold" : "text-slate-300 opacity-0 group-hover:opacity-100"}`}>
+                          {sortKey === "orderUrgency" ? (sortOrder === "asc" ? "▲" : "▼") : "↕"}
+                        </span>
+                      </div>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {topProducts.map((p) => {
+                  {sortedProducts.map((p) => {
                     let urgencyColor = "bg-slate-100 text-slate-600";
                     if (p.orderUrgency === "מיידי") {
                       urgencyColor = "bg-rose-50 text-rose-600 border border-rose-100";
